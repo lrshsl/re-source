@@ -44,7 +44,7 @@ const Player = struct {
         rl.drawRectangleV(self.pos, self.size, rl.Color.green);
     }
 
-    fn direction_from_bitmask(self: *Player, bitmask: u4) rl.Vector2 {
+    fn direction_from_bitmask(bitmask: u4) ?rl.Vector2 {
         std.debug.assert(bitmask < 0x10); // only 4 bits must be used
         return switch (bitmask) {
             0b1000 => vec2(1, 0),
@@ -56,17 +56,7 @@ const Player = struct {
             0b0001 => vec2(0, -1),
             0b1001 => vec2(1, -1).normalize(),
             0 => rl.Vector2.zero(),
-            else => {
-                // at least 3 bits set: update, but keep last direction
-                const number_bits: u8 =
-                    ((self.direction_mask & 0b1000) >> 3) +
-                    ((self.direction_mask & 0b0100) >> 2) +
-                    ((self.direction_mask & 0b0010) >> 1) +
-                    (self.direction_mask & 0b0001);
-
-                std.debug.assert(number_bits <= 2); // Maximal two bits set
-                return self.direction_from_bitmask(self.direction_mask);
-            },
+            else => null,
         };
     }
 
@@ -76,11 +66,16 @@ const Player = struct {
             (uVal(u4, rl.isKeyDown(.key_down)) << 2) |
             (uVal(u4, rl.isKeyDown(.key_left)) << 1) |
             (uVal(u4, rl.isKeyDown(.key_up))));
-        const direction = self.direction_from_bitmask(keys);
 
-        if (!floatEqual(f32, direction.length(), 0)) {
-            std.debug.assert(floatEqual(f32, direction.length(), 1));
+        // Zig is simple and readable..?
+        const direction = if (direction_from_bitmask(keys)) |direction| blk: {
+            self.direction_mask = keys;
+            break :blk direction;
+        } else direction_from_bitmask(self.direction_mask).?;
+
+        if (floatEqual(f32, direction.length(), 1)) {
             std.debug.assert(!floatEqual(f32, self.vel, 0));
+
             const step = direction.scale(self.vel);
             self.pos = self.pos.add(step);
         }
